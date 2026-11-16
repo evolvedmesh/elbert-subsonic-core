@@ -46,6 +46,11 @@ pub struct Capabilities {
     pub scan: bool,
     /// The `transcoding` and `transcodeOffset` extensions.
     pub transcoding: bool,
+    /// The managed, multi-tenant host ([`Capabilities::managed`]): core answers the account,
+    /// scan, share, chat, podcast, sonic, jukebox, radio, transcoding and `hls` calls as
+    /// ADR-0017 section 8 says, whatever the flags above say. The flags still decide which
+    /// OpenSubsonic extensions are advertised.
+    pub managed: bool,
 }
 
 impl Capabilities {
@@ -61,6 +66,27 @@ impl Capabilities {
             jukebox: true,
             scan: true,
             transcoding: true,
+            managed: false,
+        }
+    }
+
+    /// What the managed host offers: its calls are answered by core as described in
+    /// ADR-0017 section 8 (accounts, scan status, shares, chat, podcasts, sonic, jukebox,
+    /// radio per account, no transcoding). The advertised extensions are exactly
+    /// `apiKeyAuthentication`, `formPost`, `indexBasedQueue`, `playbackReport`,
+    /// `songLyrics` and `topSongsByArtistId`.
+    pub const fn managed() -> Self {
+        Capabilities {
+            accounts: true,
+            shares: true,
+            radio: true,
+            chat: true,
+            podcasts: false,
+            sonic: false,
+            jukebox: false,
+            scan: true,
+            transcoding: false,
+            managed: true,
         }
     }
 
@@ -259,6 +285,20 @@ pub struct PlaylistInfo {
     pub songs: Vec<String>,
 }
 
+/// One internet radio station of an account. Only managed hosts keep them per account (the
+/// on-device host keeps its stations in [`State`](super::state::State)).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RadioStation {
+    /// The station id.
+    pub id: String,
+    /// The station's name.
+    pub name: String,
+    /// The address of the stream: an `http` or `https` URL.
+    pub stream_url: String,
+    /// The station's home page, if it has one: an `http` or `https` URL.
+    pub home_page: Option<String>,
+}
+
 /// What one account has noted about the library: stars, ratings, plays, bookmarks, the
 /// saved queue, and every playlist there is (core applies who may see which).
 #[derive(Clone, Debug, Default)]
@@ -283,6 +323,8 @@ pub struct UserNotes {
     pub queue: Option<Queue>,
     /// Every playlist, whoever's it is.
     pub playlists: Vec<PlaylistInfo>,
+    /// The account's internet radio stations (managed hosts only).
+    pub radio: Vec<RadioStation>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -363,6 +405,31 @@ pub enum Edit {
     /// Delete a playlist.
     PlaylistDelete {
         /// The playlist id.
+        id: String,
+    },
+    /// Add an internet radio station to the account (managed hosts only).
+    RadioCreate {
+        /// The station's name.
+        name: String,
+        /// The address of the stream.
+        stream_url: String,
+        /// The station's home page.
+        home_page: Option<String>,
+    },
+    /// Replace a station's fields (managed hosts only).
+    RadioUpdate {
+        /// The station id.
+        id: String,
+        /// The station's name.
+        name: String,
+        /// The address of the stream.
+        stream_url: String,
+        /// The station's home page.
+        home_page: Option<String>,
+    },
+    /// Delete a station (managed hosts only).
+    RadioDelete {
+        /// The station id.
         id: String,
     },
 }

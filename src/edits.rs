@@ -190,7 +190,11 @@ pub async fn star(srv: &Arc<Server>, cat: &Catalog, p: &Params, who: &Who, on: b
 
 /// `setRating`.
 pub async fn set_rating(srv: &Arc<Server>, cat: &Catalog, p: &Params, who: &Who) -> Answer {
-    who.require(who.account.comment, "Rating")?;
+    // Managed accounts have fixed roles without `comment`, and rate their own library.
+    who.require(
+        who.account.comment || srv.backend.capabilities().managed,
+        "Rating",
+    )?;
     let id = p.need("id")?;
     let rating = p.int("rating").ok_or_else(|| ApiError::missing("rating"))?;
     if !(0..=5).contains(&rating) {
@@ -442,7 +446,7 @@ pub async fn save_play_queue_by_index(srv: &Arc<Server>, p: &Params, who: &Who) 
 
 /// The lyrics for `song` as the app has them: LRC or plain text.
 async fn lyrics_of(srv: &Arc<Server>, who: &Who, song: &Song) -> Option<Arc<str>> {
-    let key = song.id.to_string();
+    let key = format!("{}\0{}", who.tenant.0, song.id);
     if let Some(known) = srv.lyrics.lock().unwrap().get(&key).cloned() {
         return known;
     }

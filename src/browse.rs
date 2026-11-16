@@ -479,7 +479,7 @@ impl View<'_> {
 
     /// What Dart found about an artist (`kind` 0) or album (1), as JSON.
     async fn looked_up(&self, kind: u8, artist: &str, album: &str) -> Value {
-        let key = format!("{kind}\0{artist}\0{album}");
+        let key = format!("{}\0{kind}\0{artist}\0{album}", self.who.tenant.0);
         if let Some(known) = self.srv.info.lock().unwrap().get(&key).cloned() {
             return known;
         }
@@ -742,8 +742,11 @@ impl View<'_> {
         let now = wall_ms();
         let mut playing = self.srv.now_playing.lock().unwrap();
         playing.retain(|e| now - e.updated_ms < NOW_PLAYING_MS);
+        // A managed host serves many accounts from one server: each sees only its own plays.
+        let own_only = self.srv.backend.capabilities().managed;
         let entries: Vec<Value> = playing
             .iter()
+            .filter(|e| !own_only || e.user == self.who.name)
             .filter_map(|e| {
                 let mut value = self.song_json(self.visible_song(&e.song)?);
                 value["username"] = e.user.clone().into();

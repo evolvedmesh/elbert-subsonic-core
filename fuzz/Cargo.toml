@@ -1,0 +1,44 @@
+# The cargo-fuzz targets of elbert-subsonic-core. Not part of the published package (see
+# `exclude` in the parent Cargo.toml) and not a member of any workspace.
+[package]
+name = "elbert-subsonic-core-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+elbert-subsonic-core = { path = ".." }
+
+[workspace]
+
+[[bin]]
+name = "query_parse"
+path = "fuzz_targets/query_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "form_body"
+path = "fuzz_targets/form_body.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "enc_decode"
+path = "fuzz_targets/enc_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "range_parse"
+path = "fuzz_targets/range_parse.rs"
+test = false
+doc = false
+bench = false

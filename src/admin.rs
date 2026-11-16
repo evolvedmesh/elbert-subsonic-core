@@ -394,7 +394,7 @@ pub fn radio_stations(srv: &Arc<Server>) -> Answer {
     Ok(json!({ "internetRadioStations": { "internetRadioStation": list } }))
 }
 
-fn web_url(text: &str) -> Result<String, ApiError> {
+pub(crate) fn web_url(text: &str) -> Result<String, ApiError> {
     if text.starts_with("http://") || text.starts_with("https://") {
         Ok(text.to_string())
     } else {

@@ -1,5 +1,6 @@
 //! Core against a tiny in-memory [`Backend`]: no Dart, no files, no Elbert state. These
-//! prove the protocol works with whatever the host provides.
+//! prove the protocol works with whatever the host provides. [`Memory::managed`] is the
+//! managed host's shape: audio behind redirects, managed capabilities, no app, no data dir.
 
 use std::sync::{Arc, Mutex};
 
@@ -13,7 +14,7 @@ use super::api::{dispatch, Params};
 use super::auth::{authenticate, Who};
 use super::backend::{
     ArtistInfo, Backend, BackendError, Capabilities, CoverRef, Edit, EditOutcome, ItemKind,
-    Lockout, Lyrics, Media, MediaRequest, Peer, TenantId, UserNotes,
+    Lockout, Lyrics, Media, MediaRequest, Peer, RadioStation, TenantId, UserNotes,
 };
 use super::browse::View;
 use super::catalog::{Catalog, Pool, Raw};
@@ -21,13 +22,14 @@ use super::state::{Account, State};
 use super::{Ask, Boxed, Link, Server, Tell};
 
 /// One user, `amy`, with one library and one app password.
-struct Memory {
+pub(crate) struct Memory {
+    caps: Capabilities,
     catalog: Arc<Catalog>,
-    notes: Mutex<UserNotes>,
+    pub(crate) notes: Mutex<UserNotes>,
     failed: Mutex<Vec<Option<String>>>,
 }
 
-fn who_amy() -> Who {
+pub(crate) fn who_amy() -> Who {
     Who {
         name: "amy".into(),
         owner: false,
@@ -43,7 +45,16 @@ fn who_amy() -> Who {
 }
 
 impl Memory {
-    fn new() -> Memory {
+    pub(crate) fn new() -> Memory {
+        Memory::with(CAPABILITIES)
+    }
+
+    /// The managed host's capabilities.
+    pub(crate) fn managed() -> Memory {
+        Memory::with(Capabilities::managed())
+    }
+
+    fn with(caps: Capabilities) -> Memory {
         let mut pool = Pool::default();
         let raw: Vec<Raw> = [("s1", "First", "Alpha"), ("s2", "Second", "Beta")]
             .iter()
@@ -68,6 +79,7 @@ impl Memory {
             })
             .collect();
         Memory {
+            caps,
             catalog: Arc::new(Catalog::build(vec!["/".into()], raw, 0)),
             notes: Mutex::new(UserNotes::default()),
             failed: Mutex::new(Vec::new()),
@@ -85,11 +97,12 @@ static CAPABILITIES: Capabilities = Capabilities {
     jukebox: false,
     scan: false,
     transcoding: false,
+    managed: false,
 };
 
 impl Backend for Memory {
     fn capabilities(&self) -> &Capabilities {
-        &CAPABILITIES
+        &self.caps
     }
 
     async fn passwords(&self, user: &str) -> Result<Vec<Zeroizing<String>>, BackendError> {
@@ -142,6 +155,37 @@ impl Backend for Memory {
                     .insert(id, 1_700_000_000_000);
                 Ok(EditOutcome::Done)
             }
+            Edit::RadioCreate {
+                name,
+                stream_url,
+                home_page,
+            } => {
+                let mut notes = self.notes.lock().unwrap();
+                let id = format!("ra-{}", notes.radio.len() + 1);
+                notes.radio.push(RadioStation {
+                    id: id.clone(),
+                    name,
+                    stream_url,
+                    home_page,
+                });
+                Ok(EditOutcome::Created(id))
+            }
+            Edit::RadioUpdate {
+                id,
+                name,
+                stream_url,
+                home_page,
+            } => {
+                let mut notes = self.notes.lock().unwrap();
+                let station = notes.radio.iter_mut().find(|s| s.id == id).unwrap();
+                (station.name, station.stream_url, station.home_page) =
+                    (name, stream_url, home_page);
+                Ok(EditOutcome::Done)
+            }
+            Edit::RadioDelete { id } => {
+                self.notes.lock().unwrap().radio.retain(|s| s.id != id);
+                Ok(EditOutcome::Done)
+            }
             other => Err(BackendError::Failed(format!(
                 "not supported here: {other:?}"
             ))),
@@ -189,7 +233,7 @@ impl Backend for Memory {
 }
 
 /// The app side: nothing to say, nothing to ask.
-struct NoApp;
+pub(crate) struct NoApp;
 
 impl Link for NoApp {
     fn tell(&self, _event: Tell<'_>) {}
@@ -224,7 +268,12 @@ impl Link for NoApp {
 }
 
 fn server() -> (Arc<Server>, Arc<Memory>) {
-    let memory = Arc::new(Memory::new());
+    server_of(Memory::new())
+}
+
+/// A server over `memory`.
+pub(crate) fn server_of(memory: Memory) -> (Arc<Server>, Arc<Memory>) {
+    let memory = Arc::new(memory);
     let srv = Server::new(
         Arc::new(NoApp),
         memory.clone(),
@@ -234,7 +283,7 @@ fn server() -> (Arc<Server>, Arc<Memory>) {
     (Arc::new(srv), memory)
 }
 
-fn params(pairs: &[(&str, &str)]) -> Params {
+pub(crate) fn params(pairs: &[(&str, &str)]) -> Params {
     Params(
         pairs
             .iter()
@@ -243,7 +292,7 @@ fn params(pairs: &[(&str, &str)]) -> Params {
     )
 }
 
-fn run<T>(future: impl std::future::Future<Output = T>) -> T {
+pub(crate) fn run<T>(future: impl std::future::Future<Output = T>) -> T {
     tokio::runtime::Builder::new_current_thread()
         .build()
         .unwrap()
