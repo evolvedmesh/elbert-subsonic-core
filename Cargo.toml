@@ -10,7 +10,7 @@ homepage = "https://github.com/evolvedmesh/elbert-subsonic-core"
 readme = "README.md"
 keywords = ["subsonic", "opensubsonic", "music", "elbert"]
 categories = ["multimedia::audio", "web-programming"]
-exclude = [".github/", ".cargo/", "deny.toml", "rust-toolchain.toml"]
+exclude = [".github/", ".cargo/", "fuzz/", "deny.toml", "rust-toolchain.toml"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

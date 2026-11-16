@@ -1,0 +1,53 @@
+# Nightly fuzzing of the parsers that face the public endpoint: query strings, form bodies,
+# `enc:` passwords and Range headers (ADR-0017). Each target runs for a short, fixed time from
+# the seed corpus in fuzz/corpus; a crash uploads its input. The actions are pinned to commit
+# SHAs, and every job asks for the permissions it needs.
+name: fuzz
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+  # Pinned, and installed with the lock file it shipped with.
+  CARGO_FUZZ_VERSION: 0.13.2
+
+jobs:
+  fuzz:
+    name: fuzz ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [query_parse, form_body, enc_decode, range_parse]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the nightly Rust toolchain (libFuzzer needs it)
+        run: rustup toolchain install nightly --profile minimal
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: fuzz
+      - name: Install cargo-fuzz
+        run: cargo +nightly install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
+      - name: Fuzz (2 minutes)
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo +nightly fuzz run "$TARGET" -- -max_total_time=120
+      - name: Keep the crashing input
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: crash-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: ignore
+          retention-days: 30
