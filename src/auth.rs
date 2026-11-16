@@ -154,7 +154,8 @@ pub fn decode_password(given: &str) -> Option<String> {
 }
 
 fn decode_hex(hex: &str) -> Option<String> {
-    if !hex.len().is_multiple_of(2) || !hex.is_ascii() {
+    // `from_str_radix` alone would also take a leading `+`.
+    if !hex.len().is_multiple_of(2) || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     let bytes: Option<Vec<u8>> = (0..hex.len())
@@ -162,4 +163,22 @@ fn decode_hex(hex: &str) -> Option<String> {
         .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok())
         .collect();
     String::from_utf8(bytes?).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_password;
+
+    #[test]
+    fn enc_takes_only_whole_hex_digits() {
+        assert_eq!(
+            decode_password("enc:736573616D65").as_deref(),
+            Some("sesame")
+        );
+        assert_eq!(decode_password("sesame").as_deref(), Some("sesame"));
+        // Found by the enc_decode fuzz target: `+` is not a hex digit.
+        for bad in ["enc:+1", "enc:7", "enc:zz", "enc:c328", "enc:+a+b"] {
+            assert_eq!(decode_password(bad), None, "{bad}");
+        }
+    }
 }
