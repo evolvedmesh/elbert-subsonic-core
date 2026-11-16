@@ -1,0 +1,30 @@
+[package]
+name = "elbert-subsonic-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.87"
+description = "The transport-free core of the Subsonic and OpenSubsonic API used by Elbert: authentication, dispatch, catalog and response encoding over a Backend trait."
+license = "MIT"
+repository = "https://github.com/evolvedmesh/elbert-subsonic-core"
+homepage = "https://github.com/evolvedmesh/elbert-subsonic-core"
+readme = "README.md"
+keywords = ["subsonic", "opensubsonic", "music", "elbert"]
+categories = ["multimedia::audio", "web-programming"]
+exclude = [".github/", ".cargo/", "deny.toml", "rust-toolchain.toml"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# The Subsonic API's login token.
+md-5 = "0.10"
+# Cover ids are hashes; API keys are looked up by their SHA-256.
+sha1 = "0.10"
+sha2 = "0.10"
+# App passwords are wiped when dropped.
+zeroize = "1"
+getrandom = "0.3"
+# The `Backend` trait: async fn in traits, with `Send` futures.
+trait-variant = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["rt"] }
