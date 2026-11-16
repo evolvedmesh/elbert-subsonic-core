@@ -19,10 +19,13 @@ pub mod api;
 pub mod auth;
 pub mod backend;
 #[cfg(test)]
-mod backend_tests;
+pub(crate) mod backend_tests;
 pub mod browse;
 pub mod catalog;
 pub mod edits;
+mod managed;
+#[cfg(test)]
+mod managed_tests;
 pub mod respond;
 pub mod state;
 pub mod util;

@@ -14,7 +14,7 @@ use super::backend::Capabilities;
 use super::browse::View;
 use super::respond::{ApiError, ERR_GENERIC};
 use super::util::percent_decode;
-use super::{admin, edits, Server};
+use super::{admin, edits, managed, Server};
 
 /// What a call answers: the response payload, or the API error to send.
 pub type Answer = Result<Value, ApiError>;
@@ -109,7 +109,13 @@ pub fn extensions(caps: &Capabilities) -> Value {
 
 /// `host` is what the client reached the server as, for links the answer carries.
 pub async fn dispatch(srv: &Arc<Server>, call: &str, p: &Params, who: &Who, host: &str) -> Answer {
-    if !srv.backend.capabilities().allows(call) {
+    let caps = srv.backend.capabilities();
+    if caps.managed {
+        if let Some(answer) = managed::answer(srv, call, p, who).await {
+            return answer;
+        }
+    }
+    if !caps.allows(call) {
         return Err(ApiError(ERR_GENERIC, format!("No such call: {call}")));
     }
     // The system calls read neither the library nor the notes.

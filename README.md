@@ -65,7 +65,33 @@ encode to MP3, Opus or WAV, which needs `elbert-subsonic-server`'s `transcode` f
 
 A struct of booleans, one per optional call group: `accounts`, `shares`, `radio`, `chat`,
 `podcasts`, `sonic`, `jukebox`, `scan` and `transcoding`. They decide which calls dispatch accepts
-and which OpenSubsonic extensions are advertised.
+and which OpenSubsonic extensions are advertised. `Capabilities::all()` is the on-device host.
+
+### Managed mode
+
+`Capabilities::managed()` (its `managed` flag is set) is the multi-tenant managed host of
+ADR-0017 section 8: `dispatch` then answers these calls itself, whatever the group flags say.
+
+| Calls | Answer |
+|---|---|
+| `getUser`, `getUsers` | the caller only, with the fixed roles stream, download and playlist (never what the backend says); another name is error 50 |
+| `createUser`, `updateUser`, `deleteUser`, `changePassword` | error 50 |
+| `getScanStatus`, `startScan` | the item count of the caller's catalog, never scanning (`startScan` does nothing) |
+| `getShares`, `getChatMessages`, `getPodcasts`, `getNewestPodcasts` | empty |
+| `createShare`, `updateShare`, `deleteShare`, `addChatMessage`, the podcast writes, `jukeboxControl` | error 50 |
+| `getPodcastEpisode` | not found (70) |
+| `getSonicSimilarTracks`, `findSonicPath` | empty |
+| `getTranscodeDecision` | direct play of the original |
+| `getTranscodeStream`, `hls.m3u8` | error 0 |
+| `getNowPlaying` | the caller's own plays only |
+| internet radio | the account's own stations, read from `UserNotes::radio` and written with `Edit::RadioCreate`, `RadioUpdate` and `RadioDelete` (`http(s)` URLs, at most 100 stations) |
+| `setRating` | needs no `comment` role |
+
+The advertised extensions are exactly `apiKeyAuthentication`, `formPost`, `indexBasedQueue`,
+`playbackReport`, `songLyrics` and `topSongsByArtistId`. `stream`, `download`, `getCoverArt` and
+the other calls that answer with bytes are the host's: it asks `Server::media` and `Server::cover`
+and sends the `Media::Redirect` head. `stream?format=` is ignored because a `MediaRequest` has no
+format. Caches inside `Server` (lyrics, artist info) are keyed by tenant.
 
 ## Development
 
@@ -75,6 +101,12 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 cargo deny check
 ```
+
+The golden responses of managed mode are in `tests/golden/` (`UPDATE_GOLDEN=1 cargo test`
+rewrites them; read the diff). Fuzzing lives in `fuzz/` (needs nightly and `cargo install
+cargo-fuzz`): the targets `query_parse`, `form_body`, `enc_decode` and `range_parse` have seed
+corpora in `fuzz/corpus/<target>/`, and `cargo +nightly fuzz run <target>` runs one.
+`.github/workflows/fuzz.yml` runs each of them for two minutes every night.
 
 The toolchain is pinned in `rust-toolchain.toml`; the minimum supported Rust version of the crate
 is 1.87. CI (`.github/workflows/ci.yml`) runs the four commands above. Pushing a `v*` tag runs
